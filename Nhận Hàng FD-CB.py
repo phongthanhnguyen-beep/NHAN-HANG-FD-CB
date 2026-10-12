@@ -14,6 +14,7 @@ import gspread
 import win32print
 import win32ui
 import win32con
+#phong
 
 # Thử import thư viện qrcode hỗ trợ tạo mã QR
 try:
