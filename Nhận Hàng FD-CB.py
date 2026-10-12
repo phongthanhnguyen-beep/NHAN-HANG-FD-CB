@@ -461,7 +461,24 @@ def print_basket_label(basket_id, qty=0):
 # CƠ CHẾ ĐẨY GOOGLE SHEETS AN TOÀN, TỰ MỞ THÊM DÒNG & HÀNG ĐỢI SUBMIT ĐA LUỒNG
 # ========================================================================================
 upload_queue = queue.Queue()
+print_queue = queue.Queue()
 sheet_write_lock = threading.Lock()
+
+
+def print_worker_thread():
+    """Print labels independently so a slow Sheets request cannot delay printing."""
+    while True:
+        task = print_queue.get()
+        if task is None:
+            print_queue.task_done()
+            break
+        basket_id, qty = task
+        try:
+            print_basket_label(basket_id, qty=qty)
+        except Exception as err:
+            print(f"Lỗi worker in tem rổ [{basket_id}]: {err}")
+        finally:
+            print_queue.task_done()
 
 def safe_append_to_google_sheet(ws_sheet, rows):
     with sheet_write_lock:
@@ -527,8 +544,6 @@ def upload_worker_thread():
                 for tn in tns:
                     scanned_target.add(tn)
 
-                print_basket_label(basket_id, qty=qty)
-
             except Exception as err:
                 print(f"❌ [Submit Worker] Không thể đẩy rổ [{basket_id}] do lỗi mạng: {err}")
                 root.after(0, lambda b_id=basket_id, q=qty, tr_title=ws_target.title: messagebox.showwarning(
@@ -542,6 +557,7 @@ def upload_worker_thread():
             print(f"Lỗi worker: {q_err}")
 
 threading.Thread(target=upload_worker_thread, daemon=True).start()
+threading.Thread(target=print_worker_thread, daemon=True).start()
 
 def auto_sync_pending_batches():
     def _sync_worker():
@@ -677,6 +693,8 @@ def submit_basket(station_type, basket_name):
         "qty": total_qty,
         "tns": tns_in_basket
     })
+    # Print immediately on the dedicated printer worker, in parallel with upload.
+    print_queue.put((basket_id, total_qty))
 
 def retry_all_pending_baskets(station_type):
     auto_sync_pending_batches()
@@ -1219,26 +1237,9 @@ restore_offline_backup()
 status = ctk.CTkLabel(root, text="FD-CB Reverse Logistics System v4.2 - Ready", font=('Arial', 11), text_color="#9ca3af")
 status.pack(side=ctk.BOTTOM, fill=ctk.X, pady=2)
 
-def set_focus():
-    while True:
-        try:
-            selected_tab = tabview.get()
-            if selected_tab == "SPX TRẠM 1":
-                entry_tram1.focus()
-            elif selected_tab == "SPX TRẠM 2":
-                entry_tram2.focus()
-            elif selected_tab == "ĐƠN BẤT THƯỜNG":
-                entry_dbt.focus()
-            time.sleep(0.2)
-        except:
-            break
-
-def start_focus_thread():
-    t = threading.Thread(target=set_focus)
-    t.daemon = True
-    t.start()
-
-root.after(100, start_focus_thread)
+# Keep all Tkinter focus changes on the UI thread; submit_basket refocuses
+# the active station after each submit.
+root.after(250, entry_tram1.focus_set)
 
 if not HAS_QRCODE:
     root.after(500, lambda: messagebox.showwarning(
