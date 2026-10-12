@@ -1028,7 +1028,7 @@ def restore_offline_backup():
 ctk.set_appearance_mode("dark")  
 ctk.set_default_color_theme("blue")  
 root = ctk.CTk()
-root.title("Tool Nhận Hàng FD-CB v4.2 - Gán Mã Rổ Chuẩn & 3 Trạm Scan")
+root.title("Tool BY PHONG Nhận Hàng FD-CB GITHUB")
 root.geometry("1400x780") 
 
 style = ttk.Style()
